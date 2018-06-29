@@ -36,8 +36,10 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/multihash"
+	"github.com/ethereum/go-ethereum/swarm/spancontext"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/ethereum/go-ethereum/swarm/storage/mru"
+	opentracing "github.com/opentracing/opentracing-go"
 )
 
 var (
@@ -252,6 +254,12 @@ func (a *API) Resolve(ctx context.Context, uri *URI) (storage.Address, error) {
 	apiResolveCount.Inc(1)
 	log.Trace("resolving", "uri", uri.Addr)
 
+	var sp opentracing.Span
+	ctx, sp = spancontext.StartSpan(
+		ctx,
+		"api.resolve")
+	defer sp.Finish()
+
 	// if the URI is immutable, check if the address looks like a hash
 	if uri.Immutable() {
 		key := uri.Address()
@@ -333,7 +341,7 @@ func (a *API) Get(ctx context.Context, manifestAddr storage.Address, path string
 			log.Trace("resource type", "key", manifestAddr, "hash", entry.Hash)
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
-			rsrc, err := a.resource.Load(storage.Address(common.FromHex(entry.Hash)))
+			rsrc, err := a.resource.Load(ctx, storage.Address(common.FromHex(entry.Hash)))
 			if err != nil {
 				apiGetNotFound.Inc(1)
 				status = http.StatusNotFound
@@ -653,7 +661,7 @@ func (a *API) BuildDirectoryTree(ctx context.Context, mhash string, nameresolver
 // ResourceLookup Looks up mutable resource updates at specific periods and versions
 func (a *API) ResourceLookup(ctx context.Context, addr storage.Address, period uint32, version uint32, maxLookup *mru.LookupParams) (string, []byte, error) {
 	var err error
-	rsrc, err := a.resource.Load(addr)
+	rsrc, err := a.resource.Load(ctx, addr)
 	if err != nil {
 		return "", nil, err
 	}

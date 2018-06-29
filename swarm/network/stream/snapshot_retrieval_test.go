@@ -55,10 +55,10 @@ func initRetrievalTest() {
 	//deliveries for each node
 	deliveries = make(map[discover.NodeID]*Delivery)
 	//global retrieve func
-	getRetrieveFunc = func(id discover.NodeID) func(chunk *storage.Chunk) error {
-		return func(chunk *storage.Chunk) error {
+	getRetrieveFunc = func(id discover.NodeID) func(ctx context.Context, chunk *storage.Chunk) error {
+		return func(ctx context.Context, chunk *storage.Chunk) error {
 			skipCheck := true
-			return deliveries[id].RequestFromPeers(chunk.Addr[:], skipCheck)
+			return deliveries[id].RequestFromPeers(ctx, chunk.Addr[:], skipCheck)
 		}
 	}
 	//registries, map of discover.NodeID to its streamer

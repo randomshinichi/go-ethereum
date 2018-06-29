@@ -44,8 +44,10 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/swarm/api"
 	"github.com/ethereum/go-ethereum/swarm/log"
+	"github.com/ethereum/go-ethereum/swarm/spancontext"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/ethereum/go-ethereum/swarm/storage/mru"
+	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/pborman/uuid"
 	"github.com/rs/cors"
 )
@@ -126,6 +128,12 @@ func (s *Server) HandlePostRaw(ctx context.Context, w http.ResponseWriter, r *Re
 
 	postRawCount.Inc(1)
 
+	var sp opentracing.Span
+	ctx, sp = spancontext.StartSpan(
+		ctx,
+		"http.post.raw")
+	defer sp.Finish()
+
 	toEncrypt := false
 	if r.uri.Addr == "encrypt" {
 		toEncrypt = true
@@ -169,8 +177,14 @@ func (s *Server) HandlePostRaw(ctx context.Context, w http.ResponseWriter, r *Re
 // resulting manifest hash as a text/plain response
 func (s *Server) HandlePostFiles(ctx context.Context, w http.ResponseWriter, r *Request) {
 	log.Debug("handle.post.files", "ruid", r.ruid)
-
 	postFilesCount.Inc(1)
+
+	var sp opentracing.Span
+	ctx, sp = spancontext.StartSpan(
+		ctx,
+		"http.post.files")
+	defer sp.Finish()
+
 	contentType, params, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 	if err != nil {
 		postFilesFail.Inc(1)
@@ -402,6 +416,13 @@ func resourcePostMode(path string) (isRaw bool, frequency uint64, err error) {
 // and name "foo.eth" will be created
 func (s *Server) HandlePostResource(ctx context.Context, w http.ResponseWriter, r *Request) {
 	log.Debug("handle.post.resource", "ruid", r.ruid)
+
+	var sp opentracing.Span
+	ctx, sp = spancontext.StartSpan(
+		ctx,
+		"http.post.resource")
+	defer sp.Finish()
+
 	var err error
 	var addr storage.Address
 	var name string
@@ -627,6 +648,13 @@ func (s *Server) translateResourceError(w http.ResponseWriter, r *Request, supEr
 func (s *Server) HandleGet(ctx context.Context, w http.ResponseWriter, r *Request) {
 	log.Debug("handle.get", "ruid", r.ruid, "uri", r.uri)
 	getCount.Inc(1)
+
+	var sp opentracing.Span
+	ctx, sp = spancontext.StartSpan(
+		ctx,
+		"http.get")
+	defer sp.Finish()
+
 	var err error
 	addr := r.uri.Address()
 	if addr == nil {
@@ -725,6 +753,13 @@ func (s *Server) HandleGet(ctx context.Context, w http.ResponseWriter, r *Reques
 func (s *Server) HandleGetFiles(ctx context.Context, w http.ResponseWriter, r *Request) {
 	log.Debug("handle.get.files", "ruid", r.ruid, "uri", r.uri)
 	getFilesCount.Inc(1)
+
+	var sp opentracing.Span
+	ctx, sp = spancontext.StartSpan(
+		ctx,
+		"http.get.files")
+	defer sp.Finish()
+
 	if r.uri.Path != "" {
 		getFilesFail.Inc(1)
 		Respond(w, r, "files request cannot contain a path", http.StatusBadRequest)
@@ -801,6 +836,13 @@ func (s *Server) HandleGetFiles(ctx context.Context, w http.ResponseWriter, r *R
 func (s *Server) HandleGetList(ctx context.Context, w http.ResponseWriter, r *Request) {
 	log.Debug("handle.get.list", "ruid", r.ruid, "uri", r.uri)
 	getListCount.Inc(1)
+
+	var sp opentracing.Span
+	ctx, sp = spancontext.StartSpan(
+		ctx,
+		"http.get.list")
+	defer sp.Finish()
+
 	// ensure the root path has a trailing slash so that relative URLs work
 	if r.uri.Path == "" && !strings.HasSuffix(r.URL.Path, "/") {
 		http.Redirect(w, &r.Request, r.URL.Path+"/", http.StatusMovedPermanently)
@@ -907,6 +949,13 @@ func (s *Server) getManifestList(ctx context.Context, addr storage.Address, pref
 func (s *Server) HandleGetFile(ctx context.Context, w http.ResponseWriter, r *Request) {
 	log.Debug("handle.get.file", "ruid", r.ruid)
 	getFileCount.Inc(1)
+
+	var sp opentracing.Span
+	ctx, sp = spancontext.StartSpan(
+		ctx,
+		"http.get.file")
+	defer sp.Finish()
+
 	// ensure the root path has a trailing slash so that relative URLs work
 	if r.uri.Path == "" && !strings.HasSuffix(r.URL.Path, "/") {
 		http.Redirect(w, &r.Request, r.URL.Path+"/", http.StatusMovedPermanently)
@@ -1012,7 +1061,7 @@ func (b bufferedReadSeeker) Seek(offset int64, whence int) (int64, error) {
 }
 
 func (s *Server) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
-	ctx := context.TODO()
+	ctx := r.Context()
 
 	defer metrics.GetOrRegisterResettingTimer(fmt.Sprintf("http.request.%s.time", r.Method), nil).UpdateSince(time.Now())
 	req := &Request{Request: *r, ruid: uuid.New()[:8]}

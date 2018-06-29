@@ -13,32 +13,24 @@
 //
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
-package storage
+package protocols
 
 import (
-	"context"
-	"sync"
+	"io"
 
-	"github.com/ethereum/go-ethereum/swarm/log"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
-// PutChunks adds chunks  to localstore
-// It waits for receive on the stored channel
-// It logs but does not fail on delivery error
-func PutChunks(store *LocalStore, chunks ...*Chunk) {
-	wg := sync.WaitGroup{}
-	wg.Add(len(chunks))
-	go func() {
-		for _, c := range chunks {
-			<-c.dbStoredC
-			if err := c.GetErrored(); err != nil {
-				log.Error("chunk store fail", "err", err, "key", c.Addr)
-			}
-			wg.Done()
-		}
-	}()
-	for _, c := range chunks {
-		go store.Put(context.TODO(), c)
-	}
-	wg.Wait()
+// WrappedMsg
+type WrappedMsg struct {
+	Context []byte
+	Size    uint32
+	Payload io.Reader
+}
+
+// Decode parses the RLP content of a message into
+// the given value, which must be a pointer.
+func (wmsg WrappedMsg) Decode(val interface{}) error {
+	s := rlp.NewStream(wmsg.Payload, uint64(wmsg.Size))
+	return s.Decode(val)
 }

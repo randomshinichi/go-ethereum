@@ -74,7 +74,7 @@ func NewPeer(peer *protocols.Peer, streamer *Registry) *Peer {
 		quit:         make(chan struct{}),
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	go p.pq.Run(ctx, func(i interface{}) { p.Send(i) })
+	go p.pq.Run(ctx, func(i interface{}) { p.Send(context.TODO(), i) })
 	go func() {
 		<-p.quit
 		cancel()

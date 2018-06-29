@@ -17,6 +17,7 @@
 package stream
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sync"
@@ -71,17 +72,17 @@ type RequestSubscriptionMsg struct {
 	Priority uint8  // delivered on priority channel
 }
 
-func (p *Peer) handleRequestSubscription(req *RequestSubscriptionMsg) (err error) {
+func (p *Peer) handleRequestSubscription(ctx context.Context, req *RequestSubscriptionMsg) (err error) {
 	log.Debug(fmt.Sprintf("handleRequestSubscription: streamer %s to subscribe to %s with stream %s", p.streamer.addr.ID(), p.ID(), req.Stream))
 	return p.streamer.Subscribe(p.ID(), req.Stream, req.History, req.Priority)
 }
 
-func (p *Peer) handleSubscribeMsg(req *SubscribeMsg) (err error) {
+func (p *Peer) handleSubscribeMsg(ctx context.Context, req *SubscribeMsg) (err error) {
 	metrics.GetOrRegisterCounter("peer.handlesubscribemsg", nil).Inc(1)
 
 	defer func() {
 		if err != nil {
-			if e := p.Send(SubscribeErrorMsg{
+			if e := p.Send(context.TODO(), SubscribeErrorMsg{
 				Error: err.Error(),
 			}); e != nil {
 				log.Error("send stream subscribe error message", "err", err)
@@ -181,7 +182,7 @@ func (m OfferedHashesMsg) String() string {
 
 // handleOfferedHashesMsg protocol msg handler calls the incoming streamer interface
 // Filter method
-func (p *Peer) handleOfferedHashesMsg(req *OfferedHashesMsg) error {
+func (p *Peer) handleOfferedHashesMsg(ctx context.Context, req *OfferedHashesMsg) error {
 	metrics.GetOrRegisterCounter("peer.handleofferedhashes", nil).Inc(1)
 
 	c, _, err := p.getOrSetClient(req.Stream, req.From, req.To)
@@ -197,7 +198,7 @@ func (p *Peer) handleOfferedHashesMsg(req *OfferedHashesMsg) error {
 	for i := 0; i < len(hashes); i += HashSize {
 		hash := hashes[i : i+HashSize]
 
-		if wait := c.NeedData(hash); wait != nil {
+		if wait := c.NeedData(ctx, hash); wait != nil {
 			want.Set(i/HashSize, true)
 			wg.Add(1)
 			// create request and wait until the chunk data arrives and is stored
@@ -285,7 +286,7 @@ func (m WantedHashesMsg) String() string {
 // handleWantedHashesMsg protocol msg handler
 // * sends the next batch of unsynced keys
 // * sends the actual data chunks as per WantedHashesMsg
-func (p *Peer) handleWantedHashesMsg(req *WantedHashesMsg) error {
+func (p *Peer) handleWantedHashesMsg(ctx context.Context, req *WantedHashesMsg) error {
 	metrics.GetOrRegisterCounter("peer.handlewantedhashesmsg", nil).Inc(1)
 
 	log.Trace("received wanted batch", "peer", p.ID(), "stream", req.Stream, "from", req.From, "to", req.To)
@@ -314,7 +315,7 @@ func (p *Peer) handleWantedHashesMsg(req *WantedHashesMsg) error {
 			metrics.GetOrRegisterCounter("peer.handlewantedhashesmsg.actualget", nil).Inc(1)
 
 			hash := hashes[i*HashSize : (i+1)*HashSize]
-			data, err := s.GetData(hash)
+			data, err := s.GetData(ctx, hash)
 			if err != nil {
 				return fmt.Errorf("handleWantedHashesMsg get data %x: %v", hash, err)
 			}
@@ -363,7 +364,7 @@ func (m TakeoverProofMsg) String() string {
 	return fmt.Sprintf("Stream: '%v' [%v-%v], Root: %x, Sig: %x", m.Stream, m.Start, m.End, m.Root, m.Sig)
 }
 
-func (p *Peer) handleTakeoverProofMsg(req *TakeoverProofMsg) error {
+func (p *Peer) handleTakeoverProofMsg(ctx context.Context, req *TakeoverProofMsg) error {
 	_, err := p.getServer(req.Stream)
 	// store the strongest takeoverproof for the stream in streamer
 	return err

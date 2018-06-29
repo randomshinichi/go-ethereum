@@ -82,7 +82,7 @@ func NewFileStore(store ChunkStore, params *FileStoreParams) *FileStore {
 func (f *FileStore) Retrieve(ctx context.Context, addr Address) (reader *LazyChunkReader, isEncrypted bool) {
 	isEncrypted = len(addr) > f.hashFunc().Size()
 	getter := NewHasherStore(f.ChunkStore, f.hashFunc, isEncrypted)
-	reader = TreeJoin(addr, getter, 0)
+	reader = TreeJoin(ctx, addr, getter, 0)
 	return
 }
 

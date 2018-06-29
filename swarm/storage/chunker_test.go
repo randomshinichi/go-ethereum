@@ -18,6 +18,7 @@ package storage
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"encoding/binary"
 	"errors"
@@ -49,11 +50,11 @@ type fakeChunkStore struct {
 }
 
 // Put doesn't store anything it is just here to implement ChunkStore
-func (f *fakeChunkStore) Put(*Chunk) {
+func (f *fakeChunkStore) Put(context.Context, *Chunk) {
 }
 
 // Gut doesn't store anything it is just here to implement ChunkStore
-func (f *fakeChunkStore) Get(Address) (*Chunk, error) {
+func (f *fakeChunkStore) Get(context.Context, Address) (*Chunk, error) {
 	return nil, errors.New("FakeChunkStore doesn't support Get")
 }
 
@@ -117,7 +118,7 @@ func testRandomData(usePyramid bool, hash string, n int, tester *chunkerTester) 
 	tester.t.Logf(" Key = %v\n", addr)
 	wait()
 
-	reader := TreeJoin(addr, putGetter, 0)
+	reader := TreeJoin(context.TODO(), addr, putGetter, 0)
 	output := make([]byte, n)
 	r, err := reader.Read(output)
 	if r != n || err != io.EOF {
@@ -223,7 +224,7 @@ func TestDataAppend(t *testing.T) {
 		}
 		wait()
 
-		reader := TreeJoin(newAddr, putGetter, 0)
+		reader := TreeJoin(context.TODO(), newAddr, putGetter, 0)
 		newOutput := make([]byte, n+m)
 		r, err := reader.Read(newOutput)
 		if r != (n + m) {
@@ -287,7 +288,7 @@ func benchmarkSplitJoin(n int, t *testing.B) {
 			t.Fatalf(err.Error())
 		}
 		wait()
-		reader := TreeJoin(key, putGetter, 0)
+		reader := TreeJoin(context.TODO(), key, putGetter, 0)
 		benchReadAll(reader)
 	}
 }

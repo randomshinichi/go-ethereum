@@ -18,6 +18,7 @@ package storage
 
 import (
 	"bytes"
+	"context"
 	"crypto"
 	"crypto/rand"
 	"encoding/binary"
@@ -297,7 +298,7 @@ type Reference []byte
 
 // Putter is responsible to store data and create a reference for it
 type Putter interface {
-	Put(ChunkData) (Reference, error)
+	Put(context.Context, ChunkData) (Reference, error)
 	// RefSize returns the length of the Reference created by this Putter
 	RefSize() int64
 	// Close is to indicate that no more chunk data will be Put on this Putter
@@ -308,7 +309,7 @@ type Putter interface {
 
 // Getter is an interface to retrieve a chunk's data by its reference
 type Getter interface {
-	Get(Reference) (ChunkData, error)
+	Get(context.Context, Reference) (ChunkData, error)
 }
 
 // NOTE: this returns invalid data if chunk is encrypted

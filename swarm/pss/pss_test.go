@@ -333,7 +333,7 @@ func TestHandlerConditions(t *testing.T) {
 			Data:  []byte{0x66, 0x6f, 0x6f},
 		},
 	}
-	if err := ps.handlePssMsg(msg); err != nil {
+	if err := ps.handlePssMsg(context.TODO(), msg); err != nil {
 		t.Fatal(err.Error())
 	}
 	tmr := time.NewTimer(time.Millisecond * 100)
@@ -350,7 +350,7 @@ func TestHandlerConditions(t *testing.T) {
 	// message should pass and queue due to partial length
 	msg.To = addr[0:1]
 	msg.Payload.Data = []byte{0x78, 0x79, 0x80, 0x80, 0x79}
-	if err := ps.handlePssMsg(msg); err != nil {
+	if err := ps.handlePssMsg(context.TODO(), msg); err != nil {
 		t.Fatal(err.Error())
 	}
 	tmr.Reset(time.Millisecond * 100)
@@ -373,7 +373,7 @@ func TestHandlerConditions(t *testing.T) {
 
 	// full address mismatch should put message in queue
 	msg.To[0] = 0xff
-	if err := ps.handlePssMsg(msg); err != nil {
+	if err := ps.handlePssMsg(context.TODO(), msg); err != nil {
 		t.Fatal(err.Error())
 	}
 	tmr.Reset(time.Millisecond * 10)
@@ -396,7 +396,7 @@ func TestHandlerConditions(t *testing.T) {
 
 	// expired message should be dropped
 	msg.Expire = uint32(time.Now().Add(-time.Second).Unix())
-	if err := ps.handlePssMsg(msg); err != nil {
+	if err := ps.handlePssMsg(context.TODO(), msg); err != nil {
 		t.Fatal(err.Error())
 	}
 	tmr.Reset(time.Millisecond * 10)
@@ -416,7 +416,7 @@ func TestHandlerConditions(t *testing.T) {
 	}{
 		pssMsg: &PssMsg{},
 	}
-	if err := ps.handlePssMsg(fckedupmsg); err == nil {
+	if err := ps.handlePssMsg(context.TODO(), fckedupmsg); err == nil {
 		t.Fatalf("expected error from processMsg but error nil")
 	}
 
@@ -426,7 +426,7 @@ func TestHandlerConditions(t *testing.T) {
 		ps.outbox <- msg
 	}
 	msg.Payload.Data = []byte{0x62, 0x61, 0x72}
-	err = ps.handlePssMsg(msg)
+	err = ps.handlePssMsg(context.TODO(), msg)
 	if err == nil {
 		t.Fatal("expected error when mailbox full, but was nil")
 	}
