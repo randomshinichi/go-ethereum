@@ -46,6 +46,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/ethereum/go-ethereum/swarm/storage/mru"
+	"github.com/julienschmidt/httprouter"
 	"github.com/pborman/uuid"
 	"github.com/rs/cors"
 )
@@ -88,6 +89,7 @@ type ServerConfig struct {
 
 // starts up http server
 func StartHTTPServer(api *api.API, config *ServerConfig) {
+	router := httprouter.New()
 	var allowedOrigins []string
 	for _, domain := range strings.Split(config.CorsString, ",") {
 		allowedOrigins = append(allowedOrigins, strings.TrimSpace(domain))
