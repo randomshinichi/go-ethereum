@@ -438,6 +438,7 @@ pv(1) tool to get a progress bar:
 			return err
 		}
 		swarmmetrics.Setup(ctx)
+		tracing.Setup(ctx)
 		return nil
 	}
 	app.After = func(ctx *cli.Context) error {

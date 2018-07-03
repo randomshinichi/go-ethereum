@@ -51,9 +51,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/ethereum/go-ethereum/swarm/storage/mock"
 	"github.com/ethereum/go-ethereum/swarm/storage/mru"
-	jaeger "github.com/uber/jaeger-client-go"
-	jaegercfg "github.com/uber/jaeger-client-go/config"
-	jaegerlog "github.com/uber/jaeger-client-go/log"
+	"github.com/ethereum/go-ethereum/swarm/tracing"
 )
 
 var (
@@ -362,7 +360,7 @@ Start is called when the stack is started
 func (self *Swarm) Start(srv *p2p.Server) error {
 	startTime = time.Now()
 
-	self.tracerClose = initTracer()
+	self.tracerClose = tracing.Closer
 
 	// update uaddr to correct enode
 	newaddr := self.bzz.UpdateLocalAddr([]byte(srv.Self().String()))
@@ -552,39 +550,4 @@ type Info struct {
 
 func (self *Info) Info() *Info {
 	return self
-}
-
-func initTracer() (closer io.Closer) {
-	// Sample configuration for testing. Use constant sampling to sample every trace
-	// and enable LogSpan to log every span via configured Logger.
-	cfg := jaegercfg.Configuration{
-		Sampler: &jaegercfg.SamplerConfig{
-			Type:  jaeger.SamplerTypeConst,
-			Param: 1,
-		},
-		Reporter: &jaegercfg.ReporterConfig{
-			LogSpans:            true,
-			BufferFlushInterval: 1 * time.Second,
-			LocalAgentHostPort:  "0.0.0.0:6831",
-		},
-	}
-
-	// Example logger and metrics factory. Use github.com/uber/jaeger-client-go/log
-	// and github.com/uber/jaeger-lib/metrics respectively to bind to real logging and metrics
-	// frameworks.
-	jLogger := jaegerlog.StdLogger
-	//jMetricsFactory := metrics.NullFactory
-
-	// Initialize tracer with a logger and a metrics factory
-	closer, err := cfg.InitGlobalTracer(
-		"swarm",
-		jaegercfg.Logger(jLogger),
-		//jaegercfg.Metrics(jMetricsFactory),
-		//jaegercfg.Observer(rpcmetrics.NewObserver(jMetricsFactory, rpcmetrics.DefaultNameNormalizer)),
-	)
-	if err != nil {
-		panic(fmt.Sprintf("Could not initialize jaeger tracer: %s", err.Error()))
-	}
-
-	return closer
 }
