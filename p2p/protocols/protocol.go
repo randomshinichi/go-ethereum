@@ -115,6 +115,13 @@ func errorf(code int, format string, params ...interface{}) *Error {
 	}
 }
 
+// WrappedMsg
+type WrappedMsg struct {
+	Context []byte
+	Size    uint32
+	Payload []byte
+}
+
 // Spec is a protocol specification including its name and version as well as
 // the types of messages which are exchanged
 type Spec struct {
@@ -250,16 +257,18 @@ func (p *Peer) Send(ctx context.Context, msg interface{}) error {
 		}
 
 		writer.Flush()
+
+		log.Debug("peer.send", "successfully injected opentracing context")
 	}
 
-	size, r, err := rlp.EncodeToReader(msg)
+	r, err := rlp.EncodeToBytes(msg)
 	if err != nil {
 		return err
 	}
 
 	wmsg := WrappedMsg{
 		Context: b.Bytes(),
-		Size:    uint32(size),
+		Size:    uint32(len(r)),
 		Payload: r,
 	}
 
@@ -292,8 +301,9 @@ func (p *Peer) handleIncoming(handle func(ctx context.Context, msg interface{}) 
 
 	// unmarshal wrapped msg, which might contain context
 	var wmsg WrappedMsg
-	err = msg.Decode(wmsg)
+	err = msg.Decode(&wmsg)
 	if err != nil {
+		log.Error(err.Error())
 		return err
 	}
 
@@ -302,6 +312,7 @@ func (p *Peer) handleIncoming(handle func(ctx context.Context, msg interface{}) 
 	// if tracing is enabled and the context coming within the request is
 	// not empty, try to unmarshal it
 	if tracing.Enabled && len(wmsg.Context) > 0 {
+		log.Debug("wmsg.Context handle", wmsg.Context)
 		var sctx opentracing.SpanContext
 
 		tracer := opentracing.GlobalTracer()
@@ -309,19 +320,27 @@ func (p *Peer) handleIncoming(handle func(ctx context.Context, msg interface{}) 
 			opentracing.Binary,
 			bytes.NewReader(wmsg.Context))
 		if err != nil {
+			log.Error(err.Error())
 			return err
 		}
 
 		ctx = spancontext.WithContext(ctx, sctx)
+
+		log.Debug("peer.handleIncoming", "successfully extracted opentracing context")
+	} else if tracing.Enabled {
+		log.Debug("peer.handleIncoming", "opentracing enabled but context is empty")
 	}
 
 	val, ok := p.spec.NewMsg(msg.Code)
 	if !ok {
 		return errorf(ErrInvalidMsgCode, "%v", msg.Code)
 	}
-	if err := wmsg.Decode(val); err != nil {
+	if err := rlp.DecodeBytes(wmsg.Payload, val); err != nil {
 		return errorf(ErrDecode, "<= %v: %v", msg, err)
 	}
+	//if err := wmsg.Decode(val); err != nil {
+	//return errorf(ErrDecode, "<= %v: %v", msg, err)
+	//}
 
 	// call the registered handler callbacks
 	// a registered callback take the decoded message as argument as an interface
