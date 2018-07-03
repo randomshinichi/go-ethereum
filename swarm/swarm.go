@@ -584,7 +584,6 @@ func initTracer() (closer io.Closer) {
 	)
 	if err != nil {
 		panic(fmt.Sprintf("Could not initialize jaeger tracer: %s", err.Error()))
-		return nil
 	}
 
 	return closer
