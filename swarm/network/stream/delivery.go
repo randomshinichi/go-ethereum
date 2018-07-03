@@ -178,7 +178,7 @@ func (d *Delivery) handleRetrieveRequestMsg(ctx context.Context, sp *Peer, req *
 			chunk.SetErrored(nil)
 
 			if req.SkipCheck {
-				err := sp.Deliver(chunk, s.priority)
+				err := sp.Deliver(ctx, chunk, s.priority)
 				if err != nil {
 					log.Warn("ERROR in handleRetrieveRequestMsg, DROPPING peer!", "err", err)
 					sp.Drop(err)
@@ -194,7 +194,7 @@ func (d *Delivery) handleRetrieveRequestMsg(ctx context.Context, sp *Peer, req *
 		if length := len(chunk.SData); length < 9 {
 			log.Error("Chunk.SData to deliver is too short", "len(chunk.SData)", length, "address", chunk.Addr)
 		}
-		return sp.Deliver(chunk, s.priority)
+		return sp.Deliver(ctx, chunk, s.priority)
 	}
 	streamer.deliveryC <- chunk.Addr[:]
 	return nil
@@ -269,14 +269,21 @@ func (d *Delivery) RequestFromPeers(ctx context.Context, hash []byte, skipCheck 
 			log.Warn("Delivery.RequestFromPeers: peer not found", "id", spId)
 			return true
 		}
-		// TODO: skip light nodes that do not accept retrieve requests
-		err = sp.SendPriority(&RetrieveRequestMsg{
+		err = sp.Send(ctx, &RetrieveRequestMsg{
 			Addr:      hash,
 			SkipCheck: skipCheck,
-		}, Top)
+		})
 		if err != nil {
 			return true
 		}
+		//TODO: Decide if we need the priority
+		//err = sp.SendPriority(&RetrieveRequestMsg{
+		//Addr:      hash,
+		//SkipCheck: skipCheck,
+		//}, Top)
+		//if err != nil {
+		//return true
+		//}
 		requestFromPeersEachCount.Inc(1)
 		success = true
 		return false

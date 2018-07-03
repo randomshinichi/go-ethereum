@@ -297,7 +297,7 @@ func (p *Peer) handleIncoming(handle func(ctx context.Context, msg interface{}) 
 		return err
 	}
 
-	ctx := context.TODO()
+	ctx := context.Background()
 
 	// if tracing is enabled and the context coming within the request is
 	// not empty, try to unmarshal it

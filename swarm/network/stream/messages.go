@@ -26,7 +26,9 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/swarm/log"
 	bv "github.com/ethereum/go-ethereum/swarm/network/bitvector"
+	"github.com/ethereum/go-ethereum/swarm/spancontext"
 	"github.com/ethereum/go-ethereum/swarm/storage"
+	opentracing "github.com/opentracing/opentracing-go"
 )
 
 // Stream defines a unique stream identifier.
@@ -185,6 +187,12 @@ func (m OfferedHashesMsg) String() string {
 func (p *Peer) handleOfferedHashesMsg(ctx context.Context, req *OfferedHashesMsg) error {
 	metrics.GetOrRegisterCounter("peer.handleofferedhashes", nil).Inc(1)
 
+	var sp opentracing.Span
+	ctx, sp = spancontext.StartSpan(
+		ctx,
+		"handle.offered.hashes")
+	defer sp.Finish()
+
 	c, _, err := p.getOrSetClient(req.Stream, req.From, req.To)
 	if err != nil {
 		return err
@@ -261,11 +269,16 @@ func (p *Peer) handleOfferedHashesMsg(ctx context.Context, req *OfferedHashesMsg
 			return
 		}
 		log.Trace("sending want batch", "peer", p.ID(), "stream", msg.Stream, "from", msg.From, "to", msg.To)
-		err := p.SendPriority(msg, c.priority)
+		err := p.Send(ctx, msg)
 		if err != nil {
-			log.Warn("SendPriority err, so dropping peer", "err", err)
+			log.Warn("Send err, so dropping peer", "err", err)
 			p.Drop(err)
 		}
+		//err := p.SendPriority(msg, c.priority)
+		//if err != nil {
+		//log.Warn("SendPriority err, so dropping peer", "err", err)
+		//p.Drop(err)
+		//}
 	}()
 	return nil
 }
@@ -324,7 +337,7 @@ func (p *Peer) handleWantedHashesMsg(ctx context.Context, req *WantedHashesMsg) 
 			if length := len(chunk.SData); length < 9 {
 				log.Error("Chunk.SData to sync is too short", "len(chunk.SData)", length, "address", chunk.Addr)
 			}
-			if err := p.Deliver(chunk, s.priority); err != nil {
+			if err := p.Deliver(ctx, chunk, s.priority); err != nil {
 				return err
 			}
 		}
