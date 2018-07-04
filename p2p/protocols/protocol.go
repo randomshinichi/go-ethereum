@@ -249,12 +249,16 @@ func (p *Peer) Send(ctx context.Context, msg interface{}) error {
 
 		tracer := opentracing.GlobalTracer()
 
-		err := tracer.Inject(
-			spancontext.FromContext(ctx),
-			opentracing.Binary,
-			writer)
-		if err != nil {
-			return err
+		sctx := spancontext.FromContext(ctx)
+
+		if sctx != nil {
+			err := tracer.Inject(
+				sctx,
+				opentracing.Binary,
+				writer)
+			if err != nil {
+				return err
+			}
 		}
 
 		writer.Flush()
