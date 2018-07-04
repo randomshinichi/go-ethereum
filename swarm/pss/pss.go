@@ -72,7 +72,7 @@ type senderPeer interface {
 	Info() *p2p.PeerInfo
 	ID() discover.NodeID
 	Address() []byte
-	Send(interface{}) error
+	Send(context.Context, interface{}) error
 }
 
 // per-key peer related information

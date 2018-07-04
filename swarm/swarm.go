@@ -431,9 +431,11 @@ func (self *Swarm) updateGauges() {
 // implements the node.Service interface
 // stops all component services.
 func (self *Swarm) Stop() error {
-	err := self.tracerClose.Close()
-	if err != nil {
-		return err
+	if self.tracerClose != nil {
+		err := self.tracerClose.Close()
+		if err != nil {
+			return err
+		}
 	}
 
 	if self.ps != nil {

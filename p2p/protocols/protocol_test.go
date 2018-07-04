@@ -27,7 +27,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	p2ptest "github.com/ethereum/go-ethereum/p2p/testing"
-	"github.com/ethereum/go-ethereum/rlp"
 )
 
 // handshake message type
@@ -145,14 +144,6 @@ func protocolTester(t *testing.T, pp *p2ptest.TestPeerPool) *p2ptest.ProtocolTes
 	return p2ptest.NewProtocolTester(t, conf.ID, 2, newProtocol(pp))
 }
 
-func wrap(msg interface{}) interface{} {
-	data, _ := rlp.EncodeToBytes(msg)
-	return &WrappedMsg{
-		Size:    uint32(len(data)),
-		Payload: data,
-	}
-}
-
 func protoHandshakeExchange(id discover.NodeID, proto *protoHandshake) []p2ptest.Exchange {
 
 	return []p2ptest.Exchange{
@@ -160,7 +151,7 @@ func protoHandshakeExchange(id discover.NodeID, proto *protoHandshake) []p2ptest
 			Expects: []p2ptest.Expect{
 				{
 					Code: 0,
-					Msg:  wrap(&protoHandshake{42, "420"}),
+					Msg:  &protoHandshake{42, "420"},
 					Peer: id,
 				},
 			},
@@ -169,7 +160,7 @@ func protoHandshakeExchange(id discover.NodeID, proto *protoHandshake) []p2ptest
 			Triggers: []p2ptest.Trigger{
 				{
 					Code: 0,
-					Msg:  wrap(proto),
+					Msg:  proto,
 					Peer: id,
 				},
 			},
@@ -213,7 +204,7 @@ func moduleHandshakeExchange(id discover.NodeID, resp uint) []p2ptest.Exchange {
 			Expects: []p2ptest.Expect{
 				{
 					Code: 1,
-					Msg:  wrap(&hs0{42}),
+					Msg:  &hs0{42},
 					Peer: id,
 				},
 			},
@@ -222,7 +213,7 @@ func moduleHandshakeExchange(id discover.NodeID, resp uint) []p2ptest.Exchange {
 			Triggers: []p2ptest.Trigger{
 				{
 					Code: 1,
-					Msg:  wrap(&hs0{resp}),
+					Msg:  &hs0{resp},
 					Peer: id,
 				},
 			},
