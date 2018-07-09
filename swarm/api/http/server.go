@@ -956,11 +956,11 @@ func (s *Server) HandleGetFile(ctx context.Context, w http.ResponseWriter, r *Re
 	ctx, sp = spancontext.StartSpan(
 		ctx,
 		"http.get.file")
-	defer sp.Finish()
 
 	// ensure the root path has a trailing slash so that relative URLs work
 	if r.uri.Path == "" && !strings.HasSuffix(r.URL.Path, "/") {
 		http.Redirect(w, &r.Request, r.URL.Path+"/", http.StatusMovedPermanently)
+		sp.Finish()
 		return
 	}
 	var err error
@@ -971,6 +971,7 @@ func (s *Server) HandleGetFile(ctx context.Context, w http.ResponseWriter, r *Re
 		if err != nil {
 			getFileFail.Inc(1)
 			Respond(w, r, fmt.Sprintf("cannot resolve %s: %s", r.uri.Addr, err), http.StatusNotFound)
+			sp.Finish()
 			return
 		}
 	} else {
@@ -987,6 +988,7 @@ func (s *Server) HandleGetFile(ctx context.Context, w http.ResponseWriter, r *Re
 	if noneMatchEtag != "" {
 		if bytes.Equal(storage.Address(common.Hex2Bytes(noneMatchEtag)), contentKey) {
 			Respond(w, r, "Not Modified", http.StatusNotModified)
+			sp.Finish()
 			return
 		}
 	}
@@ -1000,6 +1002,7 @@ func (s *Server) HandleGetFile(ctx context.Context, w http.ResponseWriter, r *Re
 			getFileFail.Inc(1)
 			Respond(w, r, err.Error(), http.StatusInternalServerError)
 		}
+		sp.Finish()
 		return
 	}
 
@@ -1011,12 +1014,14 @@ func (s *Server) HandleGetFile(ctx context.Context, w http.ResponseWriter, r *Re
 		if err != nil {
 			getFileFail.Inc(1)
 			Respond(w, r, err.Error(), http.StatusInternalServerError)
+			sp.Finish()
 			return
 		}
 
 		log.Debug(fmt.Sprintf("Multiple choices! --> %v", list), "ruid", r.ruid)
 		//show a nice page links to available entries
 		ShowMultipleChoices(w, r, list)
+		sp.Finish()
 		return
 	}
 
@@ -1024,11 +1029,22 @@ func (s *Server) HandleGetFile(ctx context.Context, w http.ResponseWriter, r *Re
 	if _, err := reader.Size(ctx, nil); err != nil {
 		getFileNotFound.Inc(1)
 		Respond(w, r, fmt.Sprintf("file not found %s: %s", r.uri, err), http.StatusNotFound)
+		sp.Finish()
 		return
 	}
 
+	buf, err := ioutil.ReadAll(newBufferedReadSeeker(reader, getFileBufferSize))
+	if err != nil {
+		getFileNotFound.Inc(1)
+		Respond(w, r, fmt.Sprintf("file not found %s: %s", r.uri, err), http.StatusNotFound)
+		sp.Finish()
+		return
+	}
+
+	sp.Finish()
+
 	w.Header().Set("Content-Type", contentType)
-	http.ServeContent(w, &r.Request, "", time.Now(), newBufferedReadSeeker(reader, getFileBufferSize))
+	http.ServeContent(w, &r.Request, "", time.Now(), bytes.NewReader(buf))
 }
 
 // The size of buffer used for bufio.Reader on LazyChunkReader passed to
