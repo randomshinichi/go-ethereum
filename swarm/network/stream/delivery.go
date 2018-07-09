@@ -168,7 +168,7 @@ func (d *Delivery) handleRetrieveRequestMsg(ctx context.Context, sp *Peer, req *
 				"waiting.delivery")
 			defer osp.Finish()
 
-			t := time.NewTimer(10 * time.Minute)
+			t := time.NewTimer(10 * time.Second)
 			defer t.Stop()
 
 			log.Debug("waiting delivery", "peer", sp.ID(), "hash", req.Addr, "node", common.Bytes2Hex(d.overlay.BaseAddr()), "created", created)

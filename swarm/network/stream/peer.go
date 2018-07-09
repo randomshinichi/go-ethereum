@@ -31,7 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
-var sendTimeout = 30 * time.Second
+var sendTimeout = 5 * time.Second
 
 type notFoundError struct {
 	t string

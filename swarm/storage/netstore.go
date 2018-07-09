@@ -27,15 +27,15 @@ var (
 	// NetStore.Get timeout for get and get retries
 	// This is the maximum period that the Get will block.
 	// If it is reached, Get will return ErrChunkNotFound.
-	netStoreRetryTimeout = 30 * time.Second
+	netStoreRetryTimeout = 5 * time.Second
 	// Minimal period between calling get method on NetStore
 	// on retry. It protects calling get very frequently if
 	// it returns ErrChunkNotFound very fast.
-	netStoreMinRetryDelay = 3 * time.Second
+	netStoreMinRetryDelay = 2 * time.Second
 	// Timeout interval before retrieval is timed out.
 	// It is used in NetStore.get on waiting for ReqC to be
 	// closed on a single retrieve request.
-	searchTimeout = 10 * time.Second
+	searchTimeout = 3 * time.Second
 )
 
 // NetStore implements the ChunkStore interface,
