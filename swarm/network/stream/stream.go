@@ -32,8 +32,10 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/network/stream/intervals"
 	"github.com/ethereum/go-ethereum/swarm/pot"
+	"github.com/ethereum/go-ethereum/swarm/spancontext"
 	"github.com/ethereum/go-ethereum/swarm/state"
 	"github.com/ethereum/go-ethereum/swarm/storage"
+	opentracing "github.com/opentracing/opentracing-go"
 )
 
 const (
@@ -324,6 +326,12 @@ func (r *Registry) Quit(peerId discover.NodeID, s Stream) error {
 }
 
 func (r *Registry) Retrieve(ctx context.Context, chunk *storage.Chunk) error {
+	var sp opentracing.Span
+	ctx, sp = spancontext.StartSpan(
+		ctx,
+		"registry.retrieve")
+	defer sp.Finish()
+
 	return r.delivery.RequestFromPeers(ctx, chunk.Addr[:], r.skipCheck)
 }
 

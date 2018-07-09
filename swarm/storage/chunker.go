@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/spancontext"
 	opentracing "github.com/opentracing/opentracing-go"
+	olog "github.com/opentracing/opentracing-go/log"
 )
 
 /*
@@ -444,6 +445,12 @@ func (r *LazyChunkReader) ReadAt(b []byte, off int64) (read int, err error) {
 		r.ctx,
 		"lcr.read")
 	defer sp.Finish()
+
+	defer func() {
+		sp.LogFields(
+			olog.Int("off", int(off)),
+			olog.Int("read", read))
+	}()
 
 	// this is correct, a swarm doc cannot be zero length, so no EOF is expected
 	if len(b) == 0 {
