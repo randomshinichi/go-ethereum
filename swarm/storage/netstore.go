@@ -21,6 +21,8 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/swarm/log"
+	"github.com/ethereum/go-ethereum/swarm/spancontext"
+	opentracing "github.com/opentracing/opentracing-go"
 )
 
 var (
@@ -58,6 +60,13 @@ func NewNetStore(localStore *LocalStore, retrieve func(ctx context.Context, chun
 // ErrChunkNotFound is returned by get, until the netStoreRetryTimeout
 // is reached.
 func (ns *NetStore) Get(ctx context.Context, addr Address) (chunk *Chunk, err error) {
+
+	var sp opentracing.Span
+	ctx, sp = spancontext.StartSpan(
+		ctx,
+		"netstore.get.global")
+	defer sp.Finish()
+
 	timer := time.NewTimer(netStoreRetryTimeout)
 	defer timer.Stop()
 
@@ -131,6 +140,13 @@ func (ns *NetStore) get(ctx context.Context, addr Address, timeout time.Duration
 	if timeout == 0 {
 		timeout = searchTimeout
 	}
+
+	var sp opentracing.Span
+	ctx, sp = spancontext.StartSpan(
+		ctx,
+		"netstore.get")
+	defer sp.Finish()
+
 	if ns.retrieve == nil {
 		chunk, err = ns.localStore.Get(ctx, addr)
 		if err == nil {
