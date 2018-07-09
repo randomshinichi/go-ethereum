@@ -359,7 +359,7 @@ func (tc *TreeChunker) runWorker() {
 					return
 				}
 
-				h, err := tc.putter.Put(context.TODO(), job.chunk)
+				h, err := tc.putter.Put(tc.ctx, job.chunk)
 				if err != nil {
 					tc.errC <- err
 					return
@@ -414,7 +414,7 @@ func (r *LazyChunkReader) Size(quitC chan bool) (n int64, err error) {
 
 	log.Debug("lazychunkreader.size", "key", r.key)
 	if r.chunkData == nil {
-		chunkData, err := r.getter.Get(context.TODO(), Reference(r.key))
+		chunkData, err := r.getter.Get(r.ctx, Reference(r.key))
 		if err != nil {
 			return 0, err
 		}
@@ -530,7 +530,7 @@ func (r *LazyChunkReader) join(b []byte, off int64, eoff int64, depth int, treeS
 		wg.Add(1)
 		go func(j int64) {
 			childKey := chunkData[8+j*r.hashSize : 8+(j+1)*r.hashSize]
-			chunkData, err := r.getter.Get(context.TODO(), Reference(childKey))
+			chunkData, err := r.getter.Get(r.ctx, Reference(childKey))
 			if err != nil {
 				log.Error("lazychunkreader.join", "key", fmt.Sprintf("%x", childKey), "err", err)
 				select {
