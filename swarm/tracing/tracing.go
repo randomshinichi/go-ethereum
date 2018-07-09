@@ -33,12 +33,18 @@ var (
 		Usage: "Tracing endpoint",
 		Value: "0.0.0.0:6831",
 	}
+	TracingSvcFlag = cli.StringFlag{
+		Name:  "tracing.svc",
+		Usage: "Tracing service name",
+		Value: "swarm",
+	}
 )
 
 // Flags holds all command-line flags required for tracing collection.
 var Flags = []cli.Flag{
 	TracingFlag,
 	TracingEndpointFlag,
+	TracingSvcFlag,
 }
 
 // Init enables or disables the metrics system. Since we need this to run before
@@ -57,13 +63,14 @@ func Setup(ctx *cli.Context) {
 		log.Info("Enabling opentracing")
 		var (
 			endpoint = ctx.GlobalString(TracingEndpointFlag.Name)
+			svc      = ctx.GlobalString(TracingSvcFlag.Name)
 		)
 
-		Closer = initTracer(endpoint)
+		Closer = initTracer(endpoint, svc)
 	}
 }
 
-func initTracer(endpoint string) (closer io.Closer) {
+func initTracer(endpoint, svc string) (closer io.Closer) {
 	// Sample configuration for testing. Use constant sampling to sample every trace
 	// and enable LogSpan to log every span via configured Logger.
 	cfg := jaegercfg.Configuration{
@@ -86,7 +93,7 @@ func initTracer(endpoint string) (closer io.Closer) {
 
 	// Initialize tracer with a logger and a metrics factory
 	closer, err := cfg.InitGlobalTracer(
-		"swarm",
+		svc,
 		jaegercfg.Logger(jLogger),
 		//jaegercfg.Metrics(jMetricsFactory),
 		//jaegercfg.Observer(rpcmetrics.NewObserver(jMetricsFactory, rpcmetrics.DefaultNameNormalizer)),
