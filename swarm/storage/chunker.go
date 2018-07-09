@@ -69,7 +69,7 @@ var (
 )
 
 const (
-	DefaultChunkSize int64 = 4096
+	DefaultChunkSize int64 = 65536
 )
 
 type ChunkerParams struct {
