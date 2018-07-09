@@ -407,14 +407,15 @@ func (r *LazyChunkReader) Size(quitC chan bool) (n int64, err error) {
 	metrics.GetOrRegisterCounter("lazychunkreader.size", nil).Inc(1)
 
 	var sp opentracing.Span
-	r.ctx, sp = spancontext.StartSpan(
+	var cctx context.Context
+	cctx, sp = spancontext.StartSpan(
 		r.ctx,
 		"lcr.size")
 	defer sp.Finish()
 
 	log.Debug("lazychunkreader.size", "key", r.key)
 	if r.chunkData == nil {
-		chunkData, err := r.getter.Get(r.ctx, Reference(r.key))
+		chunkData, err := r.getter.Get(cctx, Reference(r.key))
 		if err != nil {
 			return 0, err
 		}
@@ -436,6 +437,13 @@ func (r *LazyChunkReader) Size(quitC chan bool) (n int64, err error) {
 // Size() needs to be called synchronously on the LazyChunkReader first
 func (r *LazyChunkReader) ReadAt(b []byte, off int64) (read int, err error) {
 	metrics.GetOrRegisterCounter("lazychunkreader.readat", nil).Inc(1)
+
+	var sp opentracing.Span
+	var cctx context.Context
+	cctx, sp = spancontext.StartSpan(
+		r.ctx,
+		"lcr.read")
+	defer sp.Finish()
 
 	// this is correct, a swarm doc cannot be zero length, so no EOF is expected
 	if len(b) == 0 {
@@ -465,7 +473,7 @@ func (r *LazyChunkReader) ReadAt(b []byte, off int64) (read int, err error) {
 		length *= r.chunkSize
 	}
 	wg.Add(1)
-	go r.join(b, off, off+length, depth, treeSize/r.branches, r.chunkData, &wg, errC, quitC)
+	go r.join(cctx, b, off, off+length, depth, treeSize/r.branches, r.chunkData, &wg, errC, quitC)
 	go func() {
 		wg.Wait()
 		close(errC)
@@ -483,7 +491,7 @@ func (r *LazyChunkReader) ReadAt(b []byte, off int64) (read int, err error) {
 	return len(b), nil
 }
 
-func (r *LazyChunkReader) join(b []byte, off int64, eoff int64, depth int, treeSize int64, chunkData ChunkData, parentWg *sync.WaitGroup, errC chan error, quitC chan bool) {
+func (r *LazyChunkReader) join(ctx context.Context, b []byte, off int64, eoff int64, depth int, treeSize int64, chunkData ChunkData, parentWg *sync.WaitGroup, errC chan error, quitC chan bool) {
 	defer parentWg.Done()
 	// find appropriate block level
 	for chunkData.Size() < treeSize && depth > r.depth {
@@ -530,7 +538,7 @@ func (r *LazyChunkReader) join(b []byte, off int64, eoff int64, depth int, treeS
 		wg.Add(1)
 		go func(j int64) {
 			childKey := chunkData[8+j*r.hashSize : 8+(j+1)*r.hashSize]
-			chunkData, err := r.getter.Get(r.ctx, Reference(childKey))
+			chunkData, err := r.getter.Get(ctx, Reference(childKey))
 			if err != nil {
 				log.Error("lazychunkreader.join", "key", fmt.Sprintf("%x", childKey), "err", err)
 				select {
@@ -549,7 +557,7 @@ func (r *LazyChunkReader) join(b []byte, off int64, eoff int64, depth int, treeS
 			if soff < off {
 				soff = off
 			}
-			r.join(b[soff-off:seoff-off], soff-roff, seoff-roff, depth-1, treeSize/r.branches, chunkData, wg, errC, quitC)
+			r.join(ctx, b[soff-off:seoff-off], soff-roff, seoff-roff, depth-1, treeSize/r.branches, chunkData, wg, errC, quitC)
 		}(i)
 	} //for
 }
@@ -558,12 +566,6 @@ func (r *LazyChunkReader) join(b []byte, off int64, eoff int64, depth int, treeS
 func (r *LazyChunkReader) Read(b []byte) (read int, err error) {
 	log.Debug("lazychunkreader.read", "key", r.key)
 	metrics.GetOrRegisterCounter("lazychunkreader.read", nil).Inc(1)
-
-	var sp opentracing.Span
-	r.ctx, sp = spancontext.StartSpan(
-		r.ctx,
-		"lcr.read")
-	defer sp.Finish()
 
 	read, err = r.ReadAt(b, r.off)
 	if err != nil && err != io.EOF {
