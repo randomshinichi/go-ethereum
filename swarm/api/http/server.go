@@ -724,7 +724,7 @@ func (s *Server) HandleGet(ctx context.Context, w http.ResponseWriter, r *Reques
 
 	// check the root chunk exists by retrieving the file's size
 	reader, isEncrypted := s.api.Retrieve(ctx, addr)
-	if _, err := reader.Size(nil); err != nil {
+	if _, err := reader.Size(ctx, nil); err != nil {
 		getFail.Inc(1)
 		Respond(w, r, fmt.Sprintf("root chunk not found %s: %s", addr, err), http.StatusNotFound)
 		return
@@ -796,7 +796,7 @@ func (s *Server) HandleGetFiles(ctx context.Context, w http.ResponseWriter, r *R
 
 		// retrieve the entry's key and size
 		reader, isEncrypted := s.api.Retrieve(ctx, storage.Address(common.Hex2Bytes(entry.Hash)))
-		size, err := reader.Size(nil)
+		size, err := reader.Size(ctx, nil)
 		if err != nil {
 			return err
 		}
@@ -1021,7 +1021,7 @@ func (s *Server) HandleGetFile(ctx context.Context, w http.ResponseWriter, r *Re
 	}
 
 	// check the root chunk exists by retrieving the file's size
-	if _, err := reader.Size(nil); err != nil {
+	if _, err := reader.Size(ctx, nil); err != nil {
 		getFileNotFound.Inc(1)
 		Respond(w, r, fmt.Sprintf("file not found %s: %s", r.uri, err), http.StatusNotFound)
 		return

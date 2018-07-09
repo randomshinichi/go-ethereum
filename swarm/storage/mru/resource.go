@@ -134,7 +134,7 @@ func (r *resource) NameHash() common.Hash {
 	return r.nameHash
 }
 
-func (r *resource) Size(chan bool) (int64, error) {
+func (r *resource) Size(context.Context, chan bool) (int64, error) {
 	if !r.isSynced() {
 		return 0, NewError(ErrNotSynced, "Not synced")
 	}

@@ -403,13 +403,13 @@ func (tc *TreeChunker) Join() *LazyChunkReader {
 }
 
 // Size is meant to be called on the LazySectionReader
-func (r *LazyChunkReader) Size(quitC chan bool) (n int64, err error) {
+func (r *LazyChunkReader) Size(ctx context.Context, quitC chan bool) (n int64, err error) {
 	metrics.GetOrRegisterCounter("lazychunkreader.size", nil).Inc(1)
 
 	var sp opentracing.Span
 	var cctx context.Context
 	cctx, sp = spancontext.StartSpan(
-		r.ctx,
+		ctx,
 		"lcr.size")
 	defer sp.Finish()
 
@@ -450,7 +450,7 @@ func (r *LazyChunkReader) ReadAt(b []byte, off int64) (read int, err error) {
 		return 0, nil
 	}
 	quitC := make(chan bool)
-	size, err := r.Size(quitC)
+	size, err := r.Size(cctx, quitC)
 	if err != nil {
 		log.Error("lazychunkreader.readat.size", "size", size, "err", err)
 		return 0, err
@@ -594,7 +594,7 @@ func (r *LazyChunkReader) Seek(offset int64, whence int) (int64, error) {
 		offset += r.off
 	case 2:
 		if r.chunkData == nil { //seek from the end requires rootchunk for size. call Size first
-			_, err := r.Size(nil)
+			_, err := r.Size(context.TODO(), nil)
 			if err != nil {
 				return 0, fmt.Errorf("can't get size: %v", err)
 			}

@@ -250,7 +250,7 @@ func GenerateRandomChunks(dataSize int64, count int) (chunks []*Chunk) {
 
 // Size, Seek, Read, ReadAt
 type LazySectionReader interface {
-	Size(chan bool) (int64, error)
+	Size(context.Context, chan bool) (int64, error)
 	io.Seeker
 	io.Reader
 	io.ReaderAt
