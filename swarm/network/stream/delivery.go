@@ -144,7 +144,7 @@ func (d *Delivery) handleRetrieveRequestMsg(ctx context.Context, sp *Peer, req *
 	var osp opentracing.Span
 	ctx, osp = spancontext.StartSpan(
 		ctx,
-		"handle.retrieve.request")
+		"retrieve.request")
 	defer osp.Finish()
 
 	s, err := sp.getServer(NewStream(swarmChunkServerStreamName, "", false))
@@ -162,6 +162,12 @@ func (d *Delivery) handleRetrieveRequestMsg(ctx context.Context, sp *Peer, req *
 			}
 		}
 		go func() {
+			var osp opentracing.Span
+			ctx, osp = spancontext.StartSpan(
+				ctx,
+				"waiting.delivery")
+			defer osp.Finish()
+
 			t := time.NewTimer(10 * time.Minute)
 			defer t.Stop()
 
@@ -207,6 +213,12 @@ type ChunkDeliveryMsg struct {
 }
 
 func (d *Delivery) handleChunkDeliveryMsg(ctx context.Context, sp *Peer, req *ChunkDeliveryMsg) error {
+	var osp opentracing.Span
+	ctx, osp = spancontext.StartSpan(
+		ctx,
+		"chunk.delivery")
+	defer osp.Finish()
+
 	req.peer = sp
 	d.receiveC <- req
 	return nil
