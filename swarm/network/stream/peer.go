@@ -27,8 +27,10 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/log"
 	pq "github.com/ethereum/go-ethereum/swarm/network/priorityqueue"
 	"github.com/ethereum/go-ethereum/swarm/network/stream/intervals"
+	"github.com/ethereum/go-ethereum/swarm/spancontext"
 	"github.com/ethereum/go-ethereum/swarm/state"
 	"github.com/ethereum/go-ethereum/swarm/storage"
+	opentracing "github.com/opentracing/opentracing-go"
 )
 
 var sendTimeout = 5 * time.Second
@@ -84,6 +86,12 @@ func NewPeer(peer *protocols.Peer, streamer *Registry) *Peer {
 
 // Deliver sends a storeRequestMsg protocol message to the peer
 func (p *Peer) Deliver(ctx context.Context, chunk *storage.Chunk, priority uint8) error {
+	var sp opentracing.Span
+	ctx, sp = spancontext.StartSpan(
+		ctx,
+		"send.chunk.delivery")
+	defer sp.Finish()
+
 	msg := &ChunkDeliveryMsg{
 		Addr:  chunk.Addr,
 		SData: chunk.SData,
@@ -103,6 +111,12 @@ func (p *Peer) SendPriority(msg interface{}, priority uint8) error {
 
 // SendOfferedHashes sends OfferedHashesMsg protocol msg
 func (p *Peer) SendOfferedHashes(s *server, f, t uint64) error {
+	var sp opentracing.Span
+	ctx, sp := spancontext.StartSpan(
+		context.TODO(),
+		"send.offered.hashes")
+	defer sp.Finish()
+
 	hashes, from, to, proof, err := s.SetNextBatch(f, t)
 	if err != nil {
 		return err
@@ -125,7 +139,8 @@ func (p *Peer) SendOfferedHashes(s *server, f, t uint64) error {
 		Stream:        s.stream,
 	}
 	log.Trace("Swarm syncer offer batch", "peer", p.ID(), "stream", s.stream, "len", len(hashes), "from", from, "to", to)
-	return p.SendPriority(msg, s.priority)
+	//return p.SendPriority(msg, s.priority)
+	return p.Send(ctx, msg)
 }
 
 func (p *Peer) getServer(s Stream) (*server, error) {
