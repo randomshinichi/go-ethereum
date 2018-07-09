@@ -48,6 +48,8 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/ethereum/go-ethereum/swarm/storage/mru"
 	opentracing "github.com/opentracing/opentracing-go"
+
+	olog "github.com/opentracing/opentracing-go/log"
 	"github.com/pborman/uuid"
 	"github.com/rs/cors"
 )
@@ -955,6 +957,9 @@ func (s *Server) HandleGetFile(ctx context.Context, w http.ResponseWriter, r *Re
 		ctx,
 		"http.get.file")
 	defer sp.Finish()
+
+	sp.LogFields(
+		olog.String("ruid", r.ruid))
 
 	// ensure the root path has a trailing slash so that relative URLs work
 	if r.uri.Path == "" && !strings.HasSuffix(r.URL.Path, "/") {
