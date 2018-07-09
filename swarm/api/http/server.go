@@ -958,9 +958,6 @@ func (s *Server) HandleGetFile(ctx context.Context, w http.ResponseWriter, r *Re
 		"http.get.file")
 	defer sp.Finish()
 
-	sp.LogFields(
-		olog.String("ruid", r.ruid))
-
 	// ensure the root path has a trailing slash so that relative URLs work
 	if r.uri.Path == "" && !strings.HasSuffix(r.URL.Path, "/") {
 		http.Redirect(w, &r.Request, r.URL.Path+"/", http.StatusMovedPermanently)
@@ -1068,6 +1065,12 @@ func (b bufferedReadSeeker) Seek(offset int64, whence int) (int64, error) {
 func (s *Server) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
+	var sp opentracing.Span
+	ctx, sp = spancontext.StartSpan(
+		ctx,
+		"http.serve")
+	defer sp.Finish()
+
 	defer metrics.GetOrRegisterResettingTimer(fmt.Sprintf("http.request.%s.time", r.Method), nil).UpdateSince(time.Now())
 	req := &Request{Request: *r, ruid: uuid.New()[:8]}
 	metrics.GetOrRegisterCounter(fmt.Sprintf("http.request.%s", r.Method), nil).Inc(1)
@@ -1162,6 +1165,10 @@ func (s *Server) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 	default:
 		Respond(w, req, fmt.Sprintf("%s method is not supported", r.Method), http.StatusMethodNotAllowed)
 	}
+
+	sp.LogFields(
+		olog.String("ruid", req.ruid),
+		olog.Int("code", w.statusCode))
 
 	log.Info("served response", "ruid", req.ruid, "code", w.statusCode)
 }
