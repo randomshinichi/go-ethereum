@@ -407,7 +407,7 @@ func (r *LazyChunkReader) Size(quitC chan bool) (n int64, err error) {
 	metrics.GetOrRegisterCounter("lazychunkreader.size", nil).Inc(1)
 
 	var sp opentracing.Span
-	_, sp = spancontext.StartSpan(
+	r.ctx, sp = spancontext.StartSpan(
 		r.ctx,
 		"lcr.size")
 	defer sp.Finish()
@@ -560,7 +560,7 @@ func (r *LazyChunkReader) Read(b []byte) (read int, err error) {
 	metrics.GetOrRegisterCounter("lazychunkreader.read", nil).Inc(1)
 
 	var sp opentracing.Span
-	_, sp = spancontext.StartSpan(
+	r.ctx, sp = spancontext.StartSpan(
 		r.ctx,
 		"lcr.read")
 	defer sp.Finish()

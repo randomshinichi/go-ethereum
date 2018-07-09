@@ -262,12 +262,6 @@ func (d *Delivery) RequestFromPeers(ctx context.Context, hash []byte, skipCheck 
 	var err error
 	requestFromPeersCount.Inc(1)
 
-	var sp opentracing.Span
-	ctx, sp = spancontext.StartSpan(
-		ctx,
-		"request.from.peers")
-	defer sp.Finish()
-
 	d.overlay.EachConn(hash, 255, func(p network.OverlayConn, po int, nn bool) bool {
 		spId := p.(network.Peer).ID()
 		for _, p := range peersToSkip {
