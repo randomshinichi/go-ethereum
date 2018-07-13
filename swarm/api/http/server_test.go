@@ -808,3 +808,81 @@ func TestMethodsNotAllowed(t *testing.T) {
 	}
 
 }
+
+func TestGet(t *testing.T) {
+	// HTTP convenience function
+	httpGet := func(req *http.Request, t *testing.T) (*http.Response, string) {
+		httpClient := &http.Client{}
+		res, err := httpClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		buffer, _ := ioutil.ReadAll(res.Body)
+		defer res.Body.Close()
+		body := string(buffer)
+
+		return res, body
+	}
+
+	// Setup Swarm and upload a test file to it
+	srv := testutil.NewTestSwarmServer(t, serverFunc)
+	defer srv.Close()
+
+	swarmClient := swarm.NewClient(srv.URL)
+	data := []byte("data")
+	file := &swarm.File{
+		ReadCloser: ioutil.NopCloser(bytes.NewReader(data)),
+		ManifestEntry: api.ManifestEntry{
+			Path:        "",
+			ContentType: "text/plain",
+			Size:        int64(len(data)),
+		},
+	}
+	_, err := swarmClient.Upload(file, "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Accept: text/html GET / -> 200 HTML, Swarm Landing Page
+	url := fmt.Sprintf("%s/", srv.URL)
+	req, _ := http.NewRequest("GET", url, nil)
+	req.Header.Set("Accept", "text/html")
+
+	res, body := httpGet(req, t)
+
+	if res.StatusCode != 200 {
+		t.Fatal("expected GET / to return a 200 but it didn't")
+	}
+	if !strings.HasPrefix(body, "<html>") {
+		t.Fatal("expected GET / response body to be HTML but it wasn't")
+	}
+
+	// Accept: application/json GET / -> 200 'Welcome to Swarm'
+	url = fmt.Sprintf("%s/", srv.URL)
+	req, _ = http.NewRequest("GET", url, nil)
+	req.Header.Set("Accept", "application/json")
+
+	res, body = httpGet(req, t)
+
+	if res.StatusCode != 200 {
+		t.Fatal("expected GET / to return a 200 but it didn't")
+	}
+	if !strings.Contains(body, "Welcome to Swarm!") {
+		t.Fatal("expected GET / response body to 'Welcome to Swarm!' but it wasn't")
+	}
+
+	// GET /robots.txt ->
+	url = fmt.Sprintf("%s/robots.txt", srv.URL)
+	req, _ = http.NewRequest("GET", url, nil)
+	req.Header.Add("Accept", "text/html")
+
+	res, body = httpGet(req, t)
+
+	if res.StatusCode != 200 {
+		t.Fatal("expected GET /robots.txt to return a 200 but it didn't")
+	}
+	if body != "User-agent: *\nDisallow: /" {
+		t.Fatal("robots.txt should be User-agent: * Disallow: /")
+	}
+}
