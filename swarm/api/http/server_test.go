@@ -809,22 +809,108 @@ func TestMethodsNotAllowed(t *testing.T) {
 
 }
 
-func TestGet(t *testing.T) {
-	// HTTP convenience function
-	httpGet := func(req *http.Request, t *testing.T) (*http.Response, string) {
-		httpClient := &http.Client{}
-		res, err := httpClient.Do(req)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		buffer, _ := ioutil.ReadAll(res.Body)
-		defer res.Body.Close()
-		body := string(buffer)
-
-		return res, body
+// HTTP convenience function
+func httpDo(httpMethod string, url string, reqBody io.Reader, headers map[string]string, t *testing.T) (*http.Response, string) {
+	// Build the Request
+	req, _ := http.NewRequest(httpMethod, url, reqBody)
+	for key, value := range headers {
+		req.Header.Set(key, value)
 	}
 
+	// Send Request out
+	httpClient := &http.Client{}
+	res, err := httpClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Read the HTTP Body
+	buffer, _ := ioutil.ReadAll(res.Body)
+	defer res.Body.Close()
+	body := string(buffer)
+
+	return res, body
+}
+
+func TestGet(t *testing.T) {
+	// Setup Swarm and upload a test file to it
+	srv := testutil.NewTestSwarmServer(t, serverFunc)
+	defer srv.Close()
+
+	// Accept: text/html GET / -> 200 HTML, Swarm Landing Page
+	getRootHTML := func() {
+		headers := make(map[string]string)
+		headers["Accept"] = "text/html"
+		res, body := httpDo("GET", fmt.Sprintf("%s/", srv.URL), nil, headers, t)
+
+		if res.StatusCode != 200 {
+			t.Fatal("expected GET / to return a 200 but it didn't")
+		}
+		if !strings.HasPrefix(body, "<html>") {
+			t.Fatal("expected GET / response body to be HTML but it wasn't")
+		}
+	}
+	getRootHTML()
+
+	// Accept: application/json GET / -> 200 'Welcome to Swarm'
+	getRootJSON := func() {
+		headers := make(map[string]string)
+		headers["Accept"] = "application/json"
+		res, body := httpDo("GET", fmt.Sprintf("%s/", srv.URL), nil, headers, t)
+
+		if res.StatusCode != 200 {
+			t.Fatal("expected GET / to return a 200 but it didn't")
+		}
+		if !strings.Contains(body, "Welcome to Swarm!") {
+			t.Fatal("expected GET / response body to 'Welcome to Swarm!' but it wasn't")
+		}
+	}
+	getRootJSON()
+
+	// GET /robots.txt -> 200
+	getRobotsTxt := func() {
+		url := fmt.Sprintf("%s/robots.txt", srv.URL)
+		headers := make(map[string]string)
+		headers["Accept"] = "text/html"
+
+		res, body := httpDo("GET", url, nil, headers, t)
+
+		if res.StatusCode != 200 {
+			t.Fatal("expected GET /robots.txt to return a 200 but it didn't")
+		}
+		if body != "User-agent: *\nDisallow: /" {
+			t.Fatal("robots.txt should be User-agent: * Disallow: /")
+		}
+	}
+	getRobotsTxt()
+
+	// GET /path_that_doesnt exist -> 400
+	getNonExistentPath := func() {
+		url := fmt.Sprintf("%s/nonexistent_path", srv.URL)
+
+		res, _ := httpDo("GET", url, nil, nil, t)
+
+		if res.StatusCode != 400 {
+			t.Fatalf("expected GET /nonexistent_path to return a 400 but it returned a %d", res.StatusCode)
+		}
+	}
+	getNonExistentPath()
+
+	getBadSwarmUri := func() {
+		badUrls := [4]string{"bzz:asdf/", "tbz2/", "bzz-rack:", "bzz-ls"}
+
+		for _, u := range badUrls {
+			url := fmt.Sprintf("%s/%s", srv.URL, u)
+			res, _ := httpDo("GET", url, nil, nil, t)
+			if res.StatusCode != 400 {
+				t.Fatal("expected malformed Swarm URI to make the server return 400 but it didn't")
+			}
+		}
+	}
+	getBadSwarmUri()
+}
+
+func TestModify(t *testing.T) {
 	// Setup Swarm and upload a test file to it
 	srv := testutil.NewTestSwarmServer(t, serverFunc)
 	defer srv.Close()
@@ -839,50 +925,79 @@ func TestGet(t *testing.T) {
 			Size:        int64(len(data)),
 		},
 	}
-	_, err := swarmClient.Upload(file, "", false)
+
+	hash, err := swarmClient.Upload(file, "", false)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	// Accept: text/html GET / -> 200 HTML, Swarm Landing Page
-	url := fmt.Sprintf("%s/", srv.URL)
-	req, _ := http.NewRequest("GET", url, nil)
-	req.Header.Set("Accept", "text/html")
+	// PUT/PATCH bzz:/hash -> 405 Method Not Allowed
+	putPatchHash := func() {
+		url := fmt.Sprintf("%s/bzz:/%s", srv.URL, hash)
 
-	res, body := httpGet(req, t)
+		res, _ := httpDo("PUT", url, nil, nil, t)
 
-	if res.StatusCode != 200 {
-		t.Fatal("expected GET / to return a 200 but it didn't")
+		if res.StatusCode != 405 {
+			t.Fatal("expected PUT bzz:/hash to return a 405 but it didn't")
+		}
+
+		res, _ = httpDo("PATCH", url, nil, nil, t)
+
+		if res.StatusCode != 405 {
+			t.Fatal("expected PUT bzz:/hash to return a 405 but it didn't")
+		}
 	}
-	if !strings.HasPrefix(body, "<html>") {
-		t.Fatal("expected GET / response body to be HTML but it wasn't")
+	putPatchHash()
+
+	// DELETE bzz:/hash -> 200 OK
+	deleteHash := func() {
+		url := fmt.Sprintf("%s/bzz:/%s", srv.URL, hash)
+
+		res, body := httpDo("DELETE", url, nil, nil, t)
+
+		if res.StatusCode != 200 {
+			t.Fatal("expected DELETE bzz:/hash to return 200 but it didn't")
+		}
+		if body != "8b634aea26eec353ac0ecbec20c94f44d6f8d11f38d4578a4c207a84c74ef731" {
+			t.Fatal("After DELETE bzz:/hash, the manifest's hash is not the value we expected")
+		}
 	}
+	deleteHash()
 
-	// Accept: application/json GET / -> 200 'Welcome to Swarm'
-	url = fmt.Sprintf("%s/", srv.URL)
-	req, _ = http.NewRequest("GET", url, nil)
-	req.Header.Set("Accept", "application/json")
+	// POST bzz-raw:/ "POSTdata" -> 200 OK
+	postData := func() {
+		url := fmt.Sprintf("%s/bzz-raw:/", srv.URL)
+		buf := bytes.NewReader([]byte("POSTdata"))
 
-	res, body = httpGet(req, t)
+		res, hash := httpDo("POST", url, buf, nil, t)
 
-	if res.StatusCode != 200 {
-		t.Fatal("expected GET / to return a 200 but it didn't")
+		if res.StatusCode != 200 {
+			t.Fatal("expected POST bzz-raw:/ to return 200 but it didn't")
+		}
+		// Try downloading what we just uploaded
+		url = fmt.Sprintf("%s/bzz-raw:/%s", srv.URL, hash)
+
+		res, body := httpDo("GET", url, nil, nil, t)
+		if body != "POSTdata" {
+			t.Fatalf("expected %s to be 'POSTdata' but it wasn't", hash)
+		}
 	}
-	if !strings.Contains(body, "Welcome to Swarm!") {
-		t.Fatal("expected GET / response body to 'Welcome to Swarm!' but it wasn't")
-	}
+	postData()
 
-	// GET /robots.txt ->
-	url = fmt.Sprintf("%s/robots.txt", srv.URL)
-	req, _ = http.NewRequest("GET", url, nil)
-	req.Header.Add("Accept", "text/html")
+	// PUT bzz-raw:/hash -> 405 Method Not Allowed
+	putHash := func() {
+		url := fmt.Sprintf("%s/bzz-raw:/%s", srv.URL, hash)
 
-	res, body = httpGet(req, t)
+		res, _ := httpDo("PUT", url, nil, nil, t)
 
-	if res.StatusCode != 200 {
-		t.Fatal("expected GET /robots.txt to return a 200 but it didn't")
+		if res.StatusCode != 405 {
+			t.Fatal("expected PUT bzz-raw:/hash to return 405 but it didn't")
+		}
 	}
-	if body != "User-agent: *\nDisallow: /" {
-		t.Fatal("robots.txt should be User-agent: * Disallow: /")
-	}
+	putHash()
+	// // POST bzz-raw:/encrypt
+	// url = fmt.Sprintf("%s/bzz-raw:/encrypt", srv.URL)
+	// req, _ = http.NewRequest("POST", url, buf)
+
+	// res, body = httpDo(req, t)
 }
