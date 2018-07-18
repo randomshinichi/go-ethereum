@@ -27,8 +27,10 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"mime/multipart"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -810,11 +812,14 @@ func TestMethodsNotAllowed(t *testing.T) {
 }
 
 // HTTP convenience function
-func httpDo(httpMethod string, url string, reqBody io.Reader, headers map[string]string, t *testing.T) (*http.Response, string) {
+func httpDo(httpMethod string, url string, reqBody io.Reader, headers map[string]string, verbose bool, t *testing.T) (*http.Response, string) {
 	// Build the Request
 	req, _ := http.NewRequest(httpMethod, url, reqBody)
 	for key, value := range headers {
 		req.Header.Set(key, value)
+	}
+	if verbose {
+		t.Log(req.Method, req.URL, req.Header, req.Body)
 	}
 
 	// Send Request out
@@ -833,6 +838,7 @@ func httpDo(httpMethod string, url string, reqBody io.Reader, headers map[string
 }
 
 func TestGet(t *testing.T) {
+	verbose := false
 	// Setup Swarm and upload a test file to it
 	srv := testutil.NewTestSwarmServer(t, serverFunc)
 	defer srv.Close()
@@ -841,7 +847,7 @@ func TestGet(t *testing.T) {
 	getRootHTML := func() {
 		headers := make(map[string]string)
 		headers["Accept"] = "text/html"
-		res, body := httpDo("GET", fmt.Sprintf("%s/", srv.URL), nil, headers, t)
+		res, body := httpDo("GET", fmt.Sprintf("%s/", srv.URL), nil, headers, verbose, t)
 
 		if res.StatusCode != 200 {
 			t.Fatal("expected GET / to return a 200 but it didn't")
@@ -856,7 +862,7 @@ func TestGet(t *testing.T) {
 	getRootJSON := func() {
 		headers := make(map[string]string)
 		headers["Accept"] = "application/json"
-		res, body := httpDo("GET", fmt.Sprintf("%s/", srv.URL), nil, headers, t)
+		res, body := httpDo("GET", fmt.Sprintf("%s/", srv.URL), nil, headers, verbose, t)
 
 		if res.StatusCode != 200 {
 			t.Fatal("expected GET / to return a 200 but it didn't")
@@ -873,7 +879,7 @@ func TestGet(t *testing.T) {
 		headers := make(map[string]string)
 		headers["Accept"] = "text/html"
 
-		res, body := httpDo("GET", url, nil, headers, t)
+		res, body := httpDo("GET", url, nil, headers, verbose, t)
 
 		if res.StatusCode != 200 {
 			t.Fatal("expected GET /robots.txt to return a 200 but it didn't")
@@ -888,7 +894,7 @@ func TestGet(t *testing.T) {
 	getNonExistentPath := func() {
 		url := fmt.Sprintf("%s/nonexistent_path", srv.URL)
 
-		res, _ := httpDo("GET", url, nil, nil, t)
+		res, _ := httpDo("GET", url, nil, nil, verbose, t)
 
 		if res.StatusCode != 400 {
 			t.Fatalf("expected GET /nonexistent_path to return a 400 but it returned a %d", res.StatusCode)
@@ -901,7 +907,7 @@ func TestGet(t *testing.T) {
 
 		for _, u := range badUrls {
 			url := fmt.Sprintf("%s/%s", srv.URL, u)
-			res, _ := httpDo("GET", url, nil, nil, t)
+			res, _ := httpDo("GET", url, nil, nil, verbose, t)
 			if res.StatusCode != 400 {
 				t.Fatal("expected malformed Swarm URI to make the server return 400 but it didn't")
 			}
@@ -911,6 +917,7 @@ func TestGet(t *testing.T) {
 }
 
 func TestModify(t *testing.T) {
+	verbose := false
 	// Setup Swarm and upload a test file to it
 	srv := testutil.NewTestSwarmServer(t, serverFunc)
 	defer srv.Close()
@@ -935,13 +942,13 @@ func TestModify(t *testing.T) {
 	putPatchHash := func() {
 		url := fmt.Sprintf("%s/bzz:/%s", srv.URL, hash)
 
-		res, _ := httpDo("PUT", url, nil, nil, t)
+		res, _ := httpDo("PUT", url, nil, nil, verbose, t)
 
 		if res.StatusCode != 405 {
 			t.Fatal("expected PUT bzz:/hash to return a 405 but it didn't")
 		}
 
-		res, _ = httpDo("PATCH", url, nil, nil, t)
+		res, _ = httpDo("PATCH", url, nil, nil, verbose, t)
 
 		if res.StatusCode != 405 {
 			t.Fatal("expected PUT bzz:/hash to return a 405 but it didn't")
@@ -953,7 +960,7 @@ func TestModify(t *testing.T) {
 	deleteHash := func() {
 		url := fmt.Sprintf("%s/bzz:/%s", srv.URL, hash)
 
-		res, body := httpDo("DELETE", url, nil, nil, t)
+		res, body := httpDo("DELETE", url, nil, nil, verbose, t)
 
 		if res.StatusCode != 200 {
 			t.Fatal("expected DELETE bzz:/hash to return 200 but it didn't")
@@ -969,7 +976,7 @@ func TestModify(t *testing.T) {
 		url := fmt.Sprintf("%s/bzz-raw:/", srv.URL)
 		buf := bytes.NewReader([]byte("POSTdata"))
 
-		res, hash := httpDo("POST", url, buf, nil, t)
+		res, hash := httpDo("POST", url, buf, nil, verbose, t)
 
 		if res.StatusCode != 200 {
 			t.Fatal("expected POST bzz-raw:/ to return 200 but it didn't")
@@ -977,7 +984,7 @@ func TestModify(t *testing.T) {
 		// Try downloading what we just uploaded
 		url = fmt.Sprintf("%s/bzz-raw:/%s", srv.URL, hash)
 
-		res, body := httpDo("GET", url, nil, nil, t)
+		res, body := httpDo("GET", url, nil, nil, verbose, t)
 		if body != "POSTdata" {
 			t.Fatalf("expected %s to be 'POSTdata' but it wasn't", hash)
 		}
@@ -988,16 +995,54 @@ func TestModify(t *testing.T) {
 	putHash := func() {
 		url := fmt.Sprintf("%s/bzz-raw:/%s", srv.URL, hash)
 
-		res, _ := httpDo("PUT", url, nil, nil, t)
+		res, _ := httpDo("PUT", url, nil, nil, verbose, t)
 
 		if res.StatusCode != 405 {
 			t.Fatal("expected PUT bzz-raw:/hash to return 405 but it didn't")
 		}
 	}
 	putHash()
-	// // POST bzz-raw:/encrypt
-	// url = fmt.Sprintf("%s/bzz-raw:/encrypt", srv.URL)
-	// req, _ = http.NewRequest("POST", url, buf)
 
-	// res, body = httpDo(req, t)
+	// POST bzz-raw:/encrypt
+	postBzzRawEncrypt := func() {
+		url := fmt.Sprintf("%s/bzz-raw:/encrypt", srv.URL)
+		buf := bytes.NewReader([]byte("POSTdata"))
+
+		res, body := httpDo("POST", url, buf, nil, verbose, t)
+
+		if res.StatusCode != 200 {
+			t.Fatalf("expected POST bzz-raw:/encrypt to return 200, but got %d", res.StatusCode)
+		}
+		if len(body) != 128 {
+			t.Fatalf("encrypted uploads via POST bzz-raw:/encrypt should return a 128 char long reference, but this was only %d", len(body))
+		}
+	}
+	postBzzRawEncrypt()
+
+	// POST /bzz:/ Content-Type: multipart/form-data
+	postBzzMultipartFormData := func() {
+		url := fmt.Sprintf("%s/bzz:/", srv.URL)
+
+		buf := new(bytes.Buffer)
+		form := multipart.NewWriter(buf)
+		form.WriteField("name", "John Doe")
+		file1, _ := form.CreateFormFile("cv", "cv.txt")
+		file1.Write([]byte("John Doe's Credentials"))
+		file2, _ := form.CreateFormFile("profile_picture", "profile.jpg")
+		file2.Write([]byte("imaginethisisjpegdata"))
+		form.Close()
+
+		headers := make(map[string]string)
+		headers["Content-Type"] = form.FormDataContentType()
+		headers["Content-Length"] = strconv.Itoa(buf.Len())
+		res, body := httpDo("POST", url, buf, headers, verbose, t)
+
+		if res.StatusCode != 200 {
+			t.Fatalf("expected POST multipart/form-data to return 200, but it returned %d", res.StatusCode)
+		}
+		if len(body) != 64 {
+			t.Fatalf("expected POST multipart/form-data to return a 64 char manifest but the answer was %d chars long", len(body))
+		}
+	}
+	postBzzMultipartFormData()
 }
