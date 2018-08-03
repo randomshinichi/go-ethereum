@@ -931,93 +931,88 @@ func TestGet(t *testing.T) {
 	// Setup Swarm
 	srv := testutil.NewTestSwarmServer(t, serverFunc)
 	defer srv.Close()
-	
-	type GetTestCase struct{
-		uri string
-		method string
-		headers map[string]string
+
+	type GetTestCase struct {
+		uri                string
+		method             string
+		headers            map[string]string
 		expectedStatusCode int
 		assertResponseBody string
-		verbose bool
+		verbose            bool
 	}
 
-	testCases := []GetTestCase {
+	testCases := []GetTestCase{
 		{
 			// Accept: text/html GET / -> 200 HTML, Swarm Landing Page
-			uri: fmt.Sprintf("%s/", srv.URL),
-			method: "GET",
-			headers: map[string]string{"Accept": "text/html"},
+			uri:                fmt.Sprintf("%s/", srv.URL),
+			method:             "GET",
+			headers:            map[string]string{"Accept": "text/html"},
 			expectedStatusCode: 200,
 			assertResponseBody: "<a href=\"/bzz:/theswarm.eth\">Swarm</a>: Serverless Hosting Incentivised peer-to-peer Storage and Content Distribution",
-			verbose: false,
+			verbose:            false,
 		},
 		{
 			// Accept: application/json GET / -> 200 'Welcome to Swarm'
-			uri: fmt.Sprintf("%s/", srv.URL),
-			method: "GET",
-			headers: map[string]string{"Accept": "application/json"},
+			uri:                fmt.Sprintf("%s/", srv.URL),
+			method:             "GET",
+			headers:            map[string]string{"Accept": "application/json"},
 			expectedStatusCode: 200,
 			assertResponseBody: "Welcome to Swarm!",
-			verbose: false,
+			verbose:            false,
 		},
 		{
 			// GET /robots.txt -> 200
-			uri: fmt.Sprintf("%s/robots.txt", srv.URL),
-			method: "GET",
-			headers: map[string]string{"Accept": "text/html"},
+			uri:                fmt.Sprintf("%s/robots.txt", srv.URL),
+			method:             "GET",
+			headers:            map[string]string{"Accept": "text/html"},
 			expectedStatusCode: 200,
 			assertResponseBody: "User-agent: *\nDisallow: /",
-			verbose: false,
+			verbose:            false,
 		},
 		{
 			// GET /path_that_doesnt exist -> 400
-			uri: fmt.Sprintf("%s/nonexistent_path", srv.URL),
-			method: "GET",
-			headers: map[string]string{},
+			uri:                fmt.Sprintf("%s/nonexistent_path", srv.URL),
+			method:             "GET",
+			headers:            map[string]string{},
 			expectedStatusCode: 400,
-			assertResponseBody: "",
-			verbose: false,
+			verbose:            false,
 		},
 		{
 			// GET bzz-invalid:/ -> 400
-			uri: fmt.Sprintf("%s/bzz:asdf/", srv.URL),
-			method: "GET",
-			headers: map[string]string{},
+			uri:                fmt.Sprintf("%s/bzz:asdf/", srv.URL),
+			method:             "GET",
+			headers:            map[string]string{},
 			expectedStatusCode: 400,
-			assertResponseBody: "",
-			verbose: false,
+			verbose:            false,
 		},
 		{
 			// GET bzz-invalid:/ -> 400
-			uri: fmt.Sprintf("%s/tbz2/", srv.URL),
-			method: "GET",
-			headers: map[string]string{},
+			uri:                fmt.Sprintf("%s/tbz2/", srv.URL),
+			method:             "GET",
+			headers:            map[string]string{},
 			expectedStatusCode: 400,
-			assertResponseBody: "",
-			verbose: false,
+			verbose:            false,
 		},
 		{
 			// GET bzz-invalid:/ -> 400
-			uri: fmt.Sprintf("%s/bzz-rack:/", srv.URL),
-			method: "GET",
-			headers: map[string]string{},
+			uri:                fmt.Sprintf("%s/bzz-rack:/", srv.URL),
+			method:             "GET",
+			headers:            map[string]string{},
 			expectedStatusCode: 400,
-			assertResponseBody: "",
-			verbose: false,
+			verbose:            false,
 		},
 		{
 			// GET bzz-invalid:/ -> 400
-			uri: fmt.Sprintf("%s/bzz-ls", srv.URL),
-			method: "GET",
-			headers: map[string]string{},
+			uri:                fmt.Sprintf("%s/bzz-ls", srv.URL),
+			method:             "GET",
+			headers:            map[string]string{},
 			expectedStatusCode: 400,
-			assertResponseBody: "",
-			verbose: false,
+			verbose:            false,
 		},
 	}
 
 	for _, testCase := range testCases {
-		t.Run("GET " + testCase.uri, func(t *testing.T){
+		t.Run("GET "+testCase.uri, func(t *testing.T) {
 			res, body := httpDo(testCase.method, testCase.uri, nil, testCase.headers, testCase.verbose, t)
 			if res.StatusCode != testCase.expectedStatusCode {
 				t.Fatalf("expected %s %s to return a %v but it didn't", testCase.method, testCase.uri, testCase.expectedStatusCode)
@@ -1050,87 +1045,76 @@ func TestModify(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	// PUT/PATCH bzz:/hash -> 405 Method Not Allowed
-	putPatchHash := func() {
-		url := fmt.Sprintf("%s/bzz:/%s", srv.URL, hash)
-
-		res, _ := httpDo("PUT", url, nil, nil, verbose, t)
-
-		if res.StatusCode != 405 {
-			t.Fatal("expected PUT bzz:/hash to return a 405 but it didn't")
-		}
-
-		res, _ = httpDo("PATCH", url, nil, nil, verbose, t)
-
-		if res.StatusCode != 405 {
-			t.Fatal("expected PUT bzz:/hash to return a 405 but it didn't")
-		}
+	type ModifyTestCase struct {
+		uri                string
+		method             string
+		headers            map[string]string
+		requestBody        *bytes.Reader
+		expectedStatusCode int
+		assertResponseBody string
+		verbose            bool
 	}
-	putPatchHash()
 
-	// DELETE bzz:/hash -> 200 OK
-	deleteHash := func() {
-		url := fmt.Sprintf("%s/bzz:/%s", srv.URL, hash)
-
-		res, body := httpDo("DELETE", url, nil, nil, verbose, t)
-
-		if res.StatusCode != 200 {
-			t.Fatal("expected DELETE bzz:/hash to return 200 but it didn't")
-		}
-		if body != "8b634aea26eec353ac0ecbec20c94f44d6f8d11f38d4578a4c207a84c74ef731" {
-			t.Fatal("After DELETE bzz:/hash, the manifest's hash is not the value we expected")
-		}
+	testCases := []ModifyTestCase{
+		{
+			// DELETE bzz:/hash -> 200 OK
+			uri:                fmt.Sprintf("%s/bzz:/%s", srv.URL, hash),
+			method:             "DELETE",
+			headers:            map[string]string{},
+			requestBody:        nil,
+			expectedStatusCode: 200,
+			assertResponseBody: "8b634aea26eec353ac0ecbec20c94f44d6f8d11f38d4578a4c207a84c74ef731",
+			verbose:            false,
+		},
+		{
+			// PUT bzz:/hash -> 405 Method Not Allowed
+			uri:                fmt.Sprintf("%s/bzz:/%s", srv.URL, hash),
+			method:             "PUT",
+			headers:            map[string]string{},
+			requestBody:        nil,
+			expectedStatusCode: 405,
+			verbose:            false,
+		},
+		{
+			// PUT bzz-raw:/hash -> 405 Method Not Allowed
+			uri:                fmt.Sprintf("%s/bzz-raw:/%s", srv.URL, hash),
+			method:             "PUT",
+			headers:            map[string]string{},
+			requestBody:        nil,
+			expectedStatusCode: 405,
+			verbose:            false,
+		},
+		{
+			// PATCH bzz:/hash -> 405 Method Not Allowed
+			uri:                fmt.Sprintf("%s/bzz:/%s", srv.URL, hash),
+			method:             "PATCH",
+			headers:            map[string]string{},
+			requestBody:        nil,
+			expectedStatusCode: 405,
+			verbose:            false,
+		},
+		{
+			// POST bzz-raw:/ -> 200 OK
+			uri:                fmt.Sprintf("%s/bzz:/%s", srv.URL, hash),
+			method:             "POST",
+			headers:            map[string]string{},
+			requestBody:        bytes.NewReader([]byte("POSTdata")),
+			expectedStatusCode: 200,
+			verbose:            false,
+		},
 	}
-	deleteHash()
 
-	// POST bzz-raw:/ "POSTdata" -> 200 OK
-	postData := func() {
-		url := fmt.Sprintf("%s/bzz-raw:/", srv.URL)
-		buf := bytes.NewReader([]byte("POSTdata"))
-
-		res, hash := httpDo("POST", url, buf, nil, verbose, t)
-
-		if res.StatusCode != 200 {
-			t.Fatal("expected POST bzz-raw:/ to return 200 but it didn't")
-		}
-		// Try downloading what we just uploaded
-		url = fmt.Sprintf("%s/bzz-raw:/%s", srv.URL, hash)
-
-		res, body := httpDo("GET", url, nil, nil, verbose, t)
-		if body != "POSTdata" {
-			t.Fatalf("expected %s to be 'POSTdata' but it wasn't", hash)
-		}
+	for _, testCase := range testCases {
+		t.Run(testCase.method+" "+testCase.uri, func(t *testing.T) {
+			res, body := httpDo(testCase.method, testCase.uri, testCase.requestBody, testCase.headers, testCase.verbose, t)
+			if res.StatusCode != testCase.expectedStatusCode {
+				t.Fatalf("expected %s %s to return a %v but it returned a %v instead", testCase.method, testCase.uri, testCase.expectedStatusCode, res.StatusCode)
+			}
+			if testCase.assertResponseBody != "" && !strings.Contains(body, testCase.assertResponseBody) {
+				t.Fatalf("expected %s %s to have %s within HTTP response body but it didn't", testCase.method, testCase.uri, testCase.assertResponseBody)
+			}
+		})
 	}
-	postData()
-
-	// PUT bzz-raw:/hash -> 405 Method Not Allowed
-	putHash := func() {
-		url := fmt.Sprintf("%s/bzz-raw:/%s", srv.URL, hash)
-
-		res, _ := httpDo("PUT", url, nil, nil, verbose, t)
-
-		if res.StatusCode != 405 {
-			t.Fatal("expected PUT bzz-raw:/hash to return 405 but it didn't")
-		}
-	}
-	putHash()
-
-	// POST bzz-raw:/encrypt
-	postBzzRawEncrypt := func() {
-		url := fmt.Sprintf("%s/bzz-raw:/encrypt", srv.URL)
-		buf := bytes.NewReader([]byte("POSTdata"))
-
-		res, body := httpDo("POST", url, buf, nil, verbose, t)
-
-		if res.StatusCode != 200 {
-			t.Fatalf("expected POST bzz-raw:/encrypt to return 200, but got %d", res.StatusCode)
-		}
-		if len(body) != 128 {
-			t.Fatalf("encrypted uploads via POST bzz-raw:/encrypt should return a 128 char long reference, but this was only %d", len(body))
-		}
-	}
-	postBzzRawEncrypt()
 
 	// POST /bzz:/ Content-Type: multipart/form-data
 	postBzzMultipartFormData := func() {
