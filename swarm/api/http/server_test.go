@@ -898,7 +898,10 @@ func TestMethodsNotAllowed(t *testing.T) {
 // HTTP convenience function
 func httpDo(httpMethod string, url string, reqBody io.Reader, headers map[string]string, verbose bool, t *testing.T) (*http.Response, string) {
 	// Build the Request
-	req, _ := http.NewRequest(httpMethod, url, reqBody)
+	req, err := http.NewRequest(httpMethod, url, reqBody)
+	if err != nil {
+		t.Fatal(err)
+	}
 	for key, value := range headers {
 		req.Header.Set(key, value)
 	}
@@ -914,7 +917,10 @@ func httpDo(httpMethod string, url string, reqBody io.Reader, headers map[string
 	}
 
 	// Read the HTTP Body
-	buffer, _ := ioutil.ReadAll(res.Body)
+	buffer, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
 	defer res.Body.Close()
 	body := string(buffer)
 
@@ -922,82 +928,105 @@ func httpDo(httpMethod string, url string, reqBody io.Reader, headers map[string
 }
 
 func TestGet(t *testing.T) {
-	verbose := false
-	// Setup Swarm and upload a test file to it
+	// Setup Swarm
 	srv := testutil.NewTestSwarmServer(t, serverFunc)
 	defer srv.Close()
-
-	// Accept: text/html GET / -> 200 HTML, Swarm Landing Page
-	getRootHTML := func() {
-		headers := make(map[string]string)
-		headers["Accept"] = "text/html"
-		res, body := httpDo("GET", fmt.Sprintf("%s/", srv.URL), nil, headers, verbose, t)
-
-		if res.StatusCode != 200 {
-			t.Fatal("expected GET / to return a 200 but it didn't")
-		}
-		if !strings.HasPrefix(body, "<html>") {
-			t.Fatal("expected GET / response body to be HTML but it wasn't")
-		}
+	
+	type GetTestCase struct{
+		uri string
+		method string
+		headers map[string]string
+		expectedStatusCode int
+		assertResponseBody string
+		verbose bool
 	}
-	getRootHTML()
 
-	// Accept: application/json GET / -> 200 'Welcome to Swarm'
-	getRootJSON := func() {
-		headers := make(map[string]string)
-		headers["Accept"] = "application/json"
-		res, body := httpDo("GET", fmt.Sprintf("%s/", srv.URL), nil, headers, verbose, t)
-
-		if res.StatusCode != 200 {
-			t.Fatal("expected GET / to return a 200 but it didn't")
-		}
-		if !strings.Contains(body, "Welcome to Swarm!") {
-			t.Fatal("expected GET / response body to 'Welcome to Swarm!' but it wasn't")
-		}
+	testCases := []GetTestCase {
+		{
+			// Accept: text/html GET / -> 200 HTML, Swarm Landing Page
+			uri: fmt.Sprintf("%s/", srv.URL),
+			method: "GET",
+			headers: map[string]string{"Accept": "text/html"},
+			expectedStatusCode: 200,
+			assertResponseBody: "<a href=\"/bzz:/theswarm.eth\">Swarm</a>: Serverless Hosting Incentivised peer-to-peer Storage and Content Distribution",
+			verbose: false,
+		},
+		{
+			// Accept: application/json GET / -> 200 'Welcome to Swarm'
+			uri: fmt.Sprintf("%s/", srv.URL),
+			method: "GET",
+			headers: map[string]string{"Accept": "application/json"},
+			expectedStatusCode: 200,
+			assertResponseBody: "Welcome to Swarm!",
+			verbose: false,
+		},
+		{
+			// GET /robots.txt -> 200
+			uri: fmt.Sprintf("%s/robots.txt", srv.URL),
+			method: "GET",
+			headers: map[string]string{"Accept": "text/html"},
+			expectedStatusCode: 200,
+			assertResponseBody: "User-agent: *\nDisallow: /",
+			verbose: false,
+		},
+		{
+			// GET /path_that_doesnt exist -> 400
+			uri: fmt.Sprintf("%s/nonexistent_path", srv.URL),
+			method: "GET",
+			headers: map[string]string{},
+			expectedStatusCode: 400,
+			assertResponseBody: "",
+			verbose: false,
+		},
+		{
+			// GET bzz-invalid:/ -> 400
+			uri: fmt.Sprintf("%s/bzz:asdf/", srv.URL),
+			method: "GET",
+			headers: map[string]string{},
+			expectedStatusCode: 400,
+			assertResponseBody: "",
+			verbose: false,
+		},
+		{
+			// GET bzz-invalid:/ -> 400
+			uri: fmt.Sprintf("%s/tbz2/", srv.URL),
+			method: "GET",
+			headers: map[string]string{},
+			expectedStatusCode: 400,
+			assertResponseBody: "",
+			verbose: false,
+		},
+		{
+			// GET bzz-invalid:/ -> 400
+			uri: fmt.Sprintf("%s/bzz-rack:/", srv.URL),
+			method: "GET",
+			headers: map[string]string{},
+			expectedStatusCode: 400,
+			assertResponseBody: "",
+			verbose: false,
+		},
+		{
+			// GET bzz-invalid:/ -> 400
+			uri: fmt.Sprintf("%s/bzz-ls", srv.URL),
+			method: "GET",
+			headers: map[string]string{},
+			expectedStatusCode: 400,
+			assertResponseBody: "",
+			verbose: false,
+		},
 	}
-	getRootJSON()
 
-	// GET /robots.txt -> 200
-	getRobotsTxt := func() {
-		url := fmt.Sprintf("%s/robots.txt", srv.URL)
-		headers := make(map[string]string)
-		headers["Accept"] = "text/html"
-
-		res, body := httpDo("GET", url, nil, headers, verbose, t)
-
-		if res.StatusCode != 200 {
-			t.Fatal("expected GET /robots.txt to return a 200 but it didn't")
-		}
-		if body != "User-agent: *\nDisallow: /" {
-			t.Fatal("robots.txt should be User-agent: * Disallow: /")
-		}
-	}
-	getRobotsTxt()
-
-	// GET /path_that_doesnt exist -> 400
-	getNonExistentPath := func() {
-		url := fmt.Sprintf("%s/nonexistent_path", srv.URL)
-
-		res, _ := httpDo("GET", url, nil, nil, verbose, t)
-
-		if res.StatusCode != 400 {
-			t.Fatalf("expected GET /nonexistent_path to return a 400 but it returned a %d", res.StatusCode)
-		}
-	}
-	getNonExistentPath()
-
-	getBadSwarmUri := func() {
-		badUrls := [4]string{"bzz:asdf/", "tbz2/", "bzz-rack:", "bzz-ls"}
-
-		for _, u := range badUrls {
-			url := fmt.Sprintf("%s/%s", srv.URL, u)
-			res, _ := httpDo("GET", url, nil, nil, verbose, t)
-			if res.StatusCode != 400 {
-				t.Fatal("expected malformed Swarm URI to make the server return 400 but it didn't")
+	for _, testCase := range testCases {
+		t.Run("GET " + testCase.uri, func(t *testing.T){
+			res, body := httpDo(testCase.method, testCase.uri, nil, testCase.headers, testCase.verbose, t)
+			if res.StatusCode != testCase.expectedStatusCode {
+				t.Fatalf("expected %s %s to return a %v but it didn't", testCase.method, testCase.uri, testCase.expectedStatusCode)
 			}
-		}
+			if testCase.assertResponseBody != "" && !strings.Contains(body, testCase.assertResponseBody) {
+				t.Fatalf("expected %s %s to have %s within HTTP response body but it didn't", testCase.method, testCase.uri, testCase.assertResponseBody)
+			}
+		})
 	}
-	getBadSwarmUri()
 }
 
 func TestModify(t *testing.T) {
